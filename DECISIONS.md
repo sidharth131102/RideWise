@@ -44,39 +44,66 @@ one.
   fails loud if missing.
 - **Dense-only or FTS-only retrieval** → rejected: dense misses exact terms,
   FTS misses paraphrases. Chose **hybrid (e5 cosine + BM25) fused with RRF**.
-- **Supabase/pgvector as a hard dependency; Tavily web search on** → rejected
-  for the demo: external setup and the "use only the provided pack" rule. Chose
-  a **local numpy+BM25 store** by default (Supabase optional) and web search
-  **off** pending organiser approval.
+- **Supabase/pgvector as a *hard* dependency; Tavily web search on by default**
+  → rejected: external setup risk and the "use only the provided pack" rule.
+  Chose a **local numpy+BM25 store as the default**, with Supabase pgvector
+  **optional** and wired behind a 2-second timeout that falls back to local, so
+  setup stays <10 min and the demo never breaks. Web search is **off** pending
+  organiser approval.
 - **gpt-oss `response_format=json_object`** → rejected: this endpoint corrupts
   the JSON (leaks a `final{` harmony-channel key). We disable json-mode, instruct
   "JSON only", and repair output.
-- **A role/ID picker vs. the build playbook's real login** → the brief *mandates*
-  starting a session by `customer_id` / agent, so that is the primary path; the
-  scoped DB (not the login) is the real security boundary. Email+last4 / scrypt
-  staff login is implemented as an optional upgrade.
+- **A plain role/ID picker with no verification** → rejected as unauthenticated.
+  The brief mandates starting a session by `customer_id`/agent, so we keep that
+  shape but **verify identity**: customers by Customer ID + last 4 digits of the
+  registered phone, agents by Staff ID + a **scrypt-hashed** password — both with
+  one generic error, constant-time compare and a lockout. The scoped DB remains
+  the real security boundary.
+- **OCR/vision for voice & hosted STT on the answer path** → for voice input we
+  use hosted **Whisper (Groq) for transcription only** (no answer generation),
+  behind `STT_ENABLED`, with the transcript shown in an editable card before
+  sending. It is off by default so the system stays strictly on the NeoStats LLM
+  unless the organisers permit a transcription-only service.
+- **City left un-normalised** → rejected: the data mixes Bengaluru/Bangalore/BLR,
+  so an agent's "customers in Bengaluru" would under-count. We canonicalise
+  `city` at copy time (keeping the original in `city_raw`).
 
 ## 3. Where it currently fails or behaves poorly
 - **Open-ended analytics need the LLM.** NL→SQL is unavailable offline; those
   questions return an honest "AI service unavailable" message (ID lookups still
   work via fixed queries).
 - **Offline template answers are plainer** (list evidence) than composed prose.
-- **Retrieval floor is calibrated on a small set**; a very unusual phrasing
+- **Retrieval floor is calibrated on ~37 questions**; a very unusual phrasing
   could drop below it (we retry without the floor for pure policy questions).
-- **No multilingual/voice** (Step 7 not built) — scoped out for stability.
+- **Multilingual replies** lean on the model to translate the evidence; section
+  headings may stay English and rare terms can be imperfect. Retrieval still
+  runs on the English rewrite.
+- **Voice** depends on an external STT service and audio quality; the transcript
+  is always shown for editing before it is sent.
 - **Deposit returns** aren't in the data (policy §5.3), so we explain the rule
   rather than confirming a specific return.
 - **Rounding**: half-up matches the recorded GST on the vast majority of rows;
   a handful of split/partial rows differ by ≤ ₹0.01.
 
-## 4. What I'd build next with one more week
-1. A gold NL→SQL eval set (counts/sums/joins/thresholds) + a reranker if
-   hit@5 < 90%, and a cached-SQL layer to cut tokens under rate limits.
-2. Supabase pgvector with the 2-second local fallback wired end-to-end, plus
-   LangSmith tracing (off by default) for transparency.
-3. Multilingual (hi/kn/ta/ml) and voice-in (Whisper) from the playbook's Step 7.
-4. A staff "explain this charge" view that renders the full `calc` breakdown
-   with citations, and a change-request drill (new policy version / new column).
+## 4. Evaluation (measured)
+- **Retrieval** (27 covered / 10 uncovered): hit@5 = 100% for dense, FTS and
+  hybrid; cosine distributions (covered-min 0.810 vs uncovered-max 0.841)
+  validate the 0.80 recall floor.
+- **NL→SQL** (20 agent + 7 customer-scoped, result-based comparison): 26/27
+  (96.3%); the one miss is ex-GST vs incl-GST, a definition difference.
+- **86 offline tests** (security, money with the full refund sweep, retrieval,
+  orchestrator, validation, auth, chat store, STT, UI) run with no LLM/network.
+
+## 5. What I'd build next with one more week
+1. A larger gold NL→SQL set and a reranker if hit@5 drops, plus a cached-SQL
+   layer to cut tokens under rate limits.
+2. A staff "explain this charge" view that renders the full `calc` breakdown
+   with citations, and a guided change-request drill (new policy version / new
+   column) with tests proving old records keep their version.
+3. OTP-based customer auth and real staff accounts (beyond the single shared
+   staff credential) for production.
+4. Deeper multilingual coverage (localised headings, per-language retrieval eval)
+   and voice-out (browser TTS).
 
 ## Payment semantics & assumptions (for the evaluator)
 - `amount` excludes GST; refunds are negative; collected = SUCCESS positive;
