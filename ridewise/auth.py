@@ -23,20 +23,31 @@ GENERIC_ERROR = "We could not sign you in. Check your details and try again."
 _CUST_RE = re.compile(r"^CUST\d{4}$")
 
 
-# ---- primary path: role / customer_id selection --------------------------- #
-def start_customer_session(customer_id: str, db_path, language: str = "en") -> tuple[Session | None, str | None]:
+# ---- primary path: customer_id + last 4 digits of registered phone -------- #
+def start_customer_session(customer_id: str, phone_last4: str, db_path,
+                           language: str = "en") -> tuple[Session | None, str | None]:
+    """Authenticate a customer by customer_id + last 4 digits of their phone.
+    One generic error for every failure; constant-time compare; per-id lockout."""
     cid = (customer_id or "").strip().upper()
-    if not _CUST_RE.match(cid):
-        return None, "Enter a customer ID like CUST0001."
+    last4 = re.sub(r"\D", "", phone_last4 or "")
+    key = f"cust:{cid}"
+    if _lock.locked(key):
+        return None, GENERIC_ERROR
     con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
         row = con.execute(
-            "select 1 from customers where customer_id=? limit 1", (cid,)).fetchone()
+            "select phone from customers where customer_id=? limit 1", (cid,)).fetchone()
     finally:
         con.close()
-    if not row:
-        return None, GENERIC_ERROR  # same message as a wrong id (no enumeration)
-    return Session(role="customer", customer_id=cid, language=language), None
+    # always compute a comparison (constant-time-ish) even when the id is unknown
+    real_last4 = (re.sub(r"\D", "", row[0])[-4:] if row and row[0] else "0000")
+    ok = hmac.compare_digest(last4, real_last4)
+    valid_format = bool(_CUST_RE.match(cid)) and len(last4) == 4
+    if row and ok and valid_format:
+        _lock.reset(key)
+        return Session(role="customer", customer_id=cid, language=language), None
+    _lock.record(key)
+    return None, GENERIC_ERROR
 
 
 def start_agent_session(language: str = "en") -> Session:

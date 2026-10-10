@@ -17,17 +17,17 @@ def main() -> None:
         pass
     con = sqlite3.connect(f"file:{settings.db_path}?mode=ro", uri=True)
     con.row_factory = sqlite3.Row
-    print("Sample customers to sign in as (enter the customer_id in the UI):\n")
+    print("Sample customers to sign in as (Customer ID + last 4 digits of phone):\n")
     rows = con.execute("""
-        select c.customer_id, c.full_name, c.customer_tier, c.kyc_status,
-               (select count(*) from bookings b where b.customer_id=c.customer_id) nb,
-               (select count(*) from bookings b where b.customer_id=c.customer_id
-                  and b.booking_status='CNL_U') ncnl
+        select c.customer_id, c.full_name, c.customer_tier, c.phone,
+               (select count(*) from bookings b where b.customer_id=c.customer_id) nb
         from customers c order by nb desc limit 8
     """).fetchall()
+    import re as _re
     for r in rows:
-        print(f"  {r['customer_id']}  {r['full_name']:20} tier={r['customer_tier']:8} "
-              f"kyc={r['kyc_status']:8} bookings={r['nb']:<3} cancellations={r['ncnl']}")
+        last4 = _re.sub(r"\D", "", r["phone"] or "")[-4:]
+        print(f"  {r['customer_id']}  last4={last4}  {r['full_name']:20} "
+              f"tier={r['customer_tier']:8} bookings={r['nb']}")
     print("\nFor a support-agent session, just choose 'Support agent' in the UI.")
     con.close()
 

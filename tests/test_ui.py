@@ -17,10 +17,10 @@ def test_login_renders():
     assert "Start as customer" in labels and "Start as support agent" in labels
 
 
-def test_bad_customer_id_shows_error():
+def test_bad_customer_login_shows_error():
     at = _app().run()
-    at.text_input[0].set_value("NOPE").run()
-    # click "Start as customer"
+    at.text_input[0].set_value("CUST0001").run()
+    at.text_input[1].set_value("0000").run()   # wrong last4
     [b for b in at.button if b.label == "Start as customer"][0].click().run()
     assert at.session_state["session"] is None
     assert len(at.error) >= 1
@@ -39,6 +39,7 @@ def test_agent_session_starts():
 def test_customer_session_and_new_conversation():
     at = _app().run()
     at.text_input[0].set_value("CUST0001").run()
+    at.text_input[1].set_value("2345").run()    # last4 of 9845012345
     [b for b in at.button if b.label == "Start as customer"][0].click().run()
     sess = at.session_state["session"]
     assert sess is not None and sess.role == "customer" and sess.customer_id == "CUST0001"

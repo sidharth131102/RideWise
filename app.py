@@ -138,14 +138,17 @@ def login_view():
             tab_cust, tab_agent = st.tabs(["🧑 Customer", "🧑‍💼 Support agent"])
             with tab_cust:
                 cid = st.text_input("Customer ID", placeholder="e.g. CUST0001")
+                last4 = st.text_input("Last 4 digits of registered phone",
+                                      max_chars=4, placeholder="e.g. 2345", type="password")
                 if st.button("Start as customer", type="primary", use_container_width=True):
-                    sess, err = auth.start_customer_session(cid, settings.db_path, lang)
+                    sess, err = auth.start_customer_session(cid, last4, settings.db_path, lang)
                     if err:
                         st.error(err)
                     else:
                         after_login(sess)
                         st.rerun()
-                st.caption("Tip: run `python scripts/demo_credentials.py` for sample IDs.")
+                st.caption("Verify with your Customer ID and the last 4 digits of your "
+                           "registered mobile number.")
             with tab_agent:
                 st.write("Operational access across RideWise (customer contact PII masked).")
                 if st.button("Start as support agent", type="primary", use_container_width=True):
