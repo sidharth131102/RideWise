@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from .. import tracing
 from ..config import settings
 from ..contracts import Chunk
 from . import embed
@@ -27,6 +28,7 @@ def _supabase() -> SupabaseStore | None:
         return None
 
 
+@tracing.traceable(name="policy_retrieval", run_type="retriever")
 def search(english_query: str, doc_id: str | None = None, version: str | None = None,
            k: int = 5, floor: float | None = None) -> list[Chunk]:
     qvec = embed.embed_query(english_query)

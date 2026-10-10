@@ -64,8 +64,10 @@ class Settings:
     agent_id: str = os.getenv("AGENT_ID", "agent")
     agent_pw_hash: str = os.getenv("AGENT_PW_HASH", "")
 
-    # Tracing
+    # Tracing (LangSmith; off by default)
     langsmith_tracing: bool = _b("LANGSMITH_TRACING", False)
+    langsmith_api_key: str = os.getenv("LANGSMITH_API_KEY", "")
+    langsmith_project: str = os.getenv("LANGSMITH_PROJECT", "ridewise-assist")
 
     def llm_configured(self) -> bool:
         return bool(self.llm_api_key and self.llm_base_url and self.llm_model)

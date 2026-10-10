@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import sqlglot
 from sqlglot import exp
 
+from . import tracing
 from .contracts import SqlResult
 from .db_scope import ScopedDB, normalise_ref, ref_kind
 from .llm import LLMUnavailable, get_llm
@@ -130,6 +131,7 @@ def run_query(scoped: ScopedDB, sql: str) -> SqlResult:
                      row_count=len(rows), row_count_note=note)
 
 
+@tracing.traceable(name="nl_to_sql", run_type="chain")
 def answer_question(scoped: ScopedDB, english_query: str) -> SqlResult:
     """Generate -> validate -> run. Distinguishes LLM outage from bad SQL."""
     llm = get_llm()

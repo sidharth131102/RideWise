@@ -59,11 +59,13 @@ class LLMClient:
     def _get(self):
         if self._client is None:
             from openai import OpenAI
-            self._client = OpenAI(
+            from . import tracing
+            client = OpenAI(
                 base_url=settings.llm_base_url,
                 api_key=settings.llm_api_key,
                 timeout=settings.llm_timeout_s,
             )
+            self._client = tracing.wrap_openai(client)  # no-op unless tracing on
         return self._client
 
     def _create(self, messages, json_mode: bool, max_retries: int = 3):

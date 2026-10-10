@@ -403,6 +403,8 @@ def chat_view(sess: Session):
 
 
 def main():
+    from ridewise import tracing
+    tracing.configure()      # no-op unless LANGSMITH_TRACING=true + key present
     st.markdown(CSS, unsafe_allow_html=True)
     init_state()
     if st.session_state.session is None:
