@@ -1,0 +1,83 @@
+# Every value carries a citation {doc, version, page, section, quote}.
+# Adding a new policy version = adding one entry under cancellation.versions.
+
+gst_rate: "0.18"          # RW-POL-01 s4.3
+rounding: half_up         # confirmed against recorded gst_amount in Step 1
+
+rental:
+  min_hours: 2
+  citation:
+    doc: RW-POL-01
+    version: "3.0"
+    page: 1
+    section: "3.2 / 4.1"
+    quote: "Rentals are booked in whole hours, with a minimum of 2 hours. The rental charge is always the cheaper combination: every full 24-hour block at the daily rate; remaining hours at the hourly rate, but never more than one daily rate."
+
+cancellation:
+  deciding_field: booked_at     # proven in Step 1 rule sweep (140/142)
+  versions:
+    - version: "1"
+      doc: RW-POL-02
+      from_utc: null             # the original version
+      page: 1
+      section: "1.1"
+      # slabs: descending min_hours before scheduled pickup
+      slabs:
+        - {min_hours: 24, pct: 100}
+        - {min_hours: 6,  pct: 50}
+        - {min_hours: 0,  pct: 0}
+      quote: "24h or more -> 100%; 6h or more but less than 24h -> 50%; less than 6h -> 0%. Applies to bookings made before 1 July 2026 00:00 IST."
+    - version: "2"
+      doc: RW-POL-03
+      from_utc: "2026-06-30 18:30:00"   # 1 July 2026 00:00 IST, in UTC
+      page: 2
+      section: "Annexure 1 (transcribed)"
+      slabs:
+        - {min_hours: 48, pct: 100}
+        - {min_hours: 12, pct: 75}
+        - {min_hours: 2,  pct: 25}
+        - {min_hours: 0,  pct: 0}
+      quote: "48h or more -> 100%; 12h or more but less than 48h -> 75%; 2h or more but less than 12h -> 25%; less than 2h -> 0%. Applies to bookings made on or after 1 July 2026 00:00 IST."
+
+late_fee:
+  multiplier: "1.5"
+  grace_minutes:              # RW-POL-04 Annexure A (transcribed)
+    STANDARD: 0
+    SILVER: 0
+    GOLD: 30                  # inclusive; >30 charges full lateness from minute 1
+  citation:
+    doc: RW-POL-04
+    version: "2.1"
+    page: 1
+    section: "1.2 / Annexure A"
+    quote: "Each late hour, or part of an hour, is charged at 1.5x the hourly rate. GOLD customers have a 30-minute grace period (inclusive); beyond it the full lateness is charged from the first minute."
+
+ev_low_battery:
+  threshold_pct: 10           # strictly BELOW 10% => fee; exactly 10% => no fee
+  fee: 150
+  citation:
+    doc: RW-POL-04
+    version: "2.1"
+    page: 2
+    section: "2"
+    quote: "Battery below 10% at return: flat 150 low-battery charging fee per rental. Exactly 10% is not below 10%, so no fee. Applies in addition to any late fee."
+
+damage:
+  charged_status: CHARGED
+  citation:
+    doc: RW-POL-04
+    version: "2.1"
+    page: 2
+    section: "3"
+    quote: "Damage is charged (assessed cost) only when claim_status is CHARGED. OPEN/DISPUTED: not yet. WAIVED: no charge."
+
+deposit:
+  rules:
+    - {vehicle_types: [BIKE, EV_BIKE], min_hours: 0, amount: 1000}
+    - {vehicle_types: [SCOOTER, EV_SCOOTER], min_hours: 24, amount: 500}
+  citation:
+    doc: RW-POL-01
+    version: "3.0"
+    page: 2
+    section: "5.1 / 5.3"
+    quote: "Bike/EV bike: 1000 any rental. Scooter/EV scooter: 500 for rentals of 24h or more. Deposit carries no GST. Deposit RETURNS are not recorded in RideWise payment records."
