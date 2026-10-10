@@ -10,7 +10,7 @@ import re
 
 import streamlit as st
 
-from ridewise import auth, chat_store
+from ridewise import auth, chat_store, stt
 from ridewise import db_scope as ds
 from ridewise import orchestrator as orch
 from ridewise.config import settings
@@ -48,6 +48,7 @@ def init_state():
     st.session_state.setdefault("conversations", [])
     st.session_state.setdefault("active_id", None)
     st.session_state.setdefault("pending_prompt", None)
+    st.session_state.setdefault("stt_draft", None)
     st.session_state.setdefault("language", "en")
 
 
@@ -253,7 +254,43 @@ def chat_view(sess: Session):
             else:
                 st.write(m["content"])
 
-    prompt = st.chat_input("Type your question…")
+    # voice draft card ("Heard you say"), edited by the user, never auto-sent
+    if st.session_state.stt_draft is not None:
+        with st.container(border=True):
+            st.caption(f"🎙️ Heard you say ({LANGUAGES.get(sess.language, sess.language)}) "
+                       "— edit if needed, then send")
+            edited = st.text_area("draft", value=st.session_state.stt_draft,
+                                  key="stt_edit", label_visibility="collapsed")
+            c1, c2, _ = st.columns([1, 1, 5])
+            if c1.button("Send", type="primary", use_container_width=True):
+                st.session_state.stt_draft = None
+                st.session_state.pending_prompt = edited
+                st.rerun()
+            if c2.button("Discard", use_container_width=True):
+                st.session_state.stt_draft = None
+                st.rerun()
+
+    ci = st.chat_input("Type your question…", accept_audio=settings.stt_configured())
+    prompt = None
+    if ci is not None:
+        if isinstance(ci, str):
+            prompt = ci
+        else:  # ChatInputValue (accept_audio=True)
+            audio = getattr(ci, "audio", None)
+            text = (getattr(ci, "text", "") or "").strip()
+            if audio is not None and not text:
+                data = audio.getvalue() if hasattr(audio, "getvalue") else audio.read()
+                with st.spinner("Transcribing…"):
+                    heard, err = stt.transcribe(
+                        data, sess.language, filename=getattr(audio, "name", "audio.wav"))
+                if err or not heard:
+                    st.toast(f"Could not transcribe: {err or 'empty audio'}")
+                else:
+                    st.session_state.stt_draft = heard
+                    st.rerun()
+            elif text:
+                prompt = text
+
     pending = st.session_state.pending_prompt
     if pending:
         st.session_state.pending_prompt = None

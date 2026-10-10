@@ -9,6 +9,8 @@ os.environ["LANGSMITH_TRACING"] = "false"
 os.environ["LLM_API_KEY"] = ""          # force LLM-unavailable path in tests
 os.environ["SUPABASE_DB_URL"] = ""      # tests use the local store (no network)
 os.environ["WEB_SEARCH_ENABLED"] = "false"
+os.environ["STT_ENABLED"] = "false"
+os.environ["GROQ_API_KEY"] = ""
 os.environ["HF_HUB_OFFLINE"] = "1"
 
 # Deterministic staff credentials for auth tests (set before ridewise.config import).

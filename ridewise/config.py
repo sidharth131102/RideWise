@@ -51,6 +51,15 @@ class Settings:
     web_search_enabled: bool = _b("WEB_SEARCH_ENABLED", False)
     tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
 
+    # Speech-to-text (hosted Whisper via Groq; transcription only, no answers)
+    stt_enabled: bool = _b("STT_ENABLED", False)
+    groq_api_key: str = os.getenv("GROQ_API_KEY", "")
+    stt_base_url: str = os.getenv("STT_BASE_URL", "https://api.groq.com/openai/v1")
+    stt_model: str = os.getenv("STT_MODEL", "whisper-large-v3")
+
+    def stt_configured(self) -> bool:
+        return bool(self.stt_enabled and self.groq_api_key)
+
     # Staff (agent) login
     agent_id: str = os.getenv("AGENT_ID", "agent")
     agent_pw_hash: str = os.getenv("AGENT_PW_HASH", "")
