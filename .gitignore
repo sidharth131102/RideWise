@@ -1,0 +1,26 @@
+# Secrets
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Data artifacts (generated)
+data/index/*.npy
+data/index/*.jsonl
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# HF cache (if local)
+.hf_cache/
+data/image_regions/
