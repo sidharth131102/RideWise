@@ -50,23 +50,37 @@ def _numbers(text: str) -> set[str]:
     return nums
 
 
+def _float_set(text: str) -> set[float]:
+    out = set()
+    for m in _NUM_RE.findall(text):
+        try:
+            out.add(round(float(m.replace(",", "")), 2))
+        except ValueError:
+            pass
+    return out
+
+
 def check(answer: str, evidence_text: str, n_sources: int, *,
           processed_zero: bool = False, language: str = "en") -> tuple[str, Grounding]:
     answer = normalise_answer(answer)
     g = Grounding()
-    ev_nums = _numbers(evidence_text)
+    ev_floats = _float_set(evidence_text)
     ev_ids = set(_ID_RE.findall(evidence_text))
 
-    # numbers (allow small ints for list numbering; ignore digits in IDs)
+    # numbers (value-based match; allow small ints for list numbering; ignore IDs)
     ans_wo_ids = _ID_RE.sub("", answer)
     for n in _numbers(ans_wo_ids):
-        if n in ev_nums:
-            continue
         try:
-            if float(n) <= 10 and "." not in n:
-                continue  # list numbering / small counts
+            val = round(float(n), 2)
         except ValueError:
-            pass
+            continue
+        if any(abs(val - e) <= 0.01 for e in ev_floats):
+            continue
+        # a bare integer that is the floor of an evidence value (e.g. 480 vs 480.00)
+        if any(abs(val - round(e)) <= 0.01 for e in ev_floats):
+            continue
+        if val <= 10 and float(n) == int(val):
+            continue  # list numbering / small counts
         g.fail(f"number not in evidence: {n}")
 
     # ids

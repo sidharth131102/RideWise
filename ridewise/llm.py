@@ -41,6 +41,13 @@ def _extract_json(text: str) -> dict[str, Any]:
     raise LLMUnavailable("model did not return valid JSON")
 
 
+def _repair_json(obj: dict[str, Any]) -> dict[str, Any]:
+    """Drop the spurious 'final{' harmony-channel key gpt-oss sometimes leaks."""
+    if isinstance(obj, dict):
+        return {k: v for k, v in obj.items() if "{" not in str(k)}
+    return obj
+
+
 class LLMClient:
     def __init__(self) -> None:
         self._client = None
@@ -92,14 +99,18 @@ class LLMClient:
     def chat_json(self, system: str, user: str) -> dict[str, Any]:
         if not self.configured:
             raise LLMUnavailable("LLM is not configured")
+        # NOTE: gpt-oss on this endpoint corrupts output under response_format
+        # json_object (leaks a "final{" harmony-channel key). It returns clean
+        # JSON without it, so we rely on the instruction + robust extraction.
+        system = system + "\n\nOutput ONLY a single compact JSON object, no prose, no code fences."
         resp = self._create(
             [{"role": "system", "content": system},
              {"role": "user", "content": user}],
-            json_mode=True)
+            json_mode=False)
         content = (resp.choices[0].message.content or "").strip()
         if not content:
             raise LLMUnavailable("empty LLM response")
-        return _extract_json(content)
+        return _repair_json(_extract_json(content))
 
     def chat_text(self, system: str, user: str) -> str:
         if not self.configured:
