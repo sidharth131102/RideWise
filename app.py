@@ -151,9 +151,18 @@ def login_view():
                            "registered mobile number.")
             with tab_agent:
                 st.write("Operational access across RideWise (customer contact PII masked).")
+                staff_id = st.text_input("Staff ID", placeholder="e.g. agent")
+                staff_pw = st.text_input("Password", type="password")
                 if st.button("Start as support agent", type="primary", use_container_width=True):
-                    after_login(auth.start_agent_session(lang))
-                    st.rerun()
+                    sess, err = auth.agent_login(staff_id, staff_pw, lang)
+                    if err:
+                        st.error(err)
+                    else:
+                        after_login(sess)
+                        st.rerun()
+                if not settings.agent_pw_hash:
+                    st.caption("No staff password set yet. Run "
+                               "`python scripts/set_agent_password.py`.")
         st.caption("🔒 Read-only · the assistant never books, cancels, pays or refunds.")
 
 

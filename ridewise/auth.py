@@ -119,14 +119,21 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
-def agent_login(staff_id: str, password: str) -> tuple[Session | None, str | None]:
-    key = f"staff:{(staff_id or '').strip()}"
+def agent_login(staff_id: str, password: str, language: str = "en") -> tuple[Session | None, str | None]:
+    """Authenticate a support agent by Staff ID + password (scrypt hash in
+    AGENT_PW_HASH). Staff login is disabled until a hash is configured."""
+    from .config import settings
+    key = f"staff:{(staff_id or '').strip().lower()}"
     if _lock.locked(key):
         return None, GENERIC_ERROR
-    stored = os.getenv("AGENT_PW_HASH", "")
-    ok = verify_password(password or "", stored) if stored else False
-    if ok:
+    stored = settings.agent_pw_hash or os.getenv("AGENT_PW_HASH", "")
+    if not stored:
+        return None, ("Staff login is not configured. Set a password with "
+                      "`python scripts/set_agent_password.py`.")
+    valid_id = (staff_id or "").strip().lower() == (settings.agent_id or "agent").strip().lower()
+    ok = verify_password(password or "", stored)       # always runs (timing)
+    if ok and valid_id:
         _lock.reset(key)
-        return Session(role="agent", customer_id=None), None
+        return Session(role="agent", customer_id=None, language=language), None
     _lock.record(key)
     return None, GENERIC_ERROR

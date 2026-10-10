@@ -28,12 +28,24 @@ def test_bad_customer_login_shows_error():
 
 def test_agent_session_starts():
     at = _app().run()
+    # customer tab inputs are [0],[1]; agent tab Staff ID / Password are [2],[3]
+    at.text_input[2].set_value("agent").run()
+    at.text_input[3].set_value("test-staff-pass-123").run()
     [b for b in at.button if b.label == "Start as support agent"][0].click().run()
     sess = at.session_state["session"]
     assert sess is not None and sess.role == "agent"
     # sidebar now shows New conversation / Sign out
     labels = [b.label for b in at.button]
     assert any("New conversation" in l for l in labels) and "Sign out" in labels
+
+
+def test_agent_wrong_password_shows_error():
+    at = _app().run()
+    at.text_input[2].set_value("agent").run()
+    at.text_input[3].set_value("nope").run()
+    [b for b in at.button if b.label == "Start as support agent"][0].click().run()
+    assert at.session_state["session"] is None
+    assert len(at.error) >= 1
 
 
 def test_customer_session_and_new_conversation():

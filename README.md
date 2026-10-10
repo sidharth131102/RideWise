@@ -25,9 +25,15 @@ python -m venv .venv
 pip install -r requirements.txt
 
 cp .env.example .env            # then fill in the NeoStats LLM credentials
+python scripts/set_agent_password.py   # set the support-agent (staff) password
 python -m ridewise.rag.ingest   # build the policy index (first run downloads the embedding model)
 streamlit run app.py
 ```
+
+**Signing in**
+- **Customer**: Customer ID + the last 4 digits of the registered phone
+  (`python scripts/demo_credentials.py` lists sample IDs with their last-4).
+- **Support agent**: Staff ID (default `agent`) + the password you set above.
 
 Optional sanity checks:
 ```bash

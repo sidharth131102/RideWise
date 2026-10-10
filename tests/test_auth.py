@@ -38,6 +38,28 @@ def test_lockout_after_repeated_failures():
     assert sess is None and err == auth.GENERIC_ERROR
 
 
-def test_agent_session():
+def test_agent_login_success():
+    sess, err = auth.agent_login("agent", "test-staff-pass-123")
+    assert err is None and sess is not None and sess.role == "agent"
+
+
+def test_agent_login_wrong_password():
+    sess, err = auth.agent_login("agent", "wrong-password-xx")
+    assert sess is None and err == auth.GENERIC_ERROR
+
+
+def test_agent_login_wrong_id():
+    sess, err = auth.agent_login("not-agent", "test-staff-pass-123")
+    assert sess is None and err == auth.GENERIC_ERROR
+
+
+def test_password_hash_roundtrip():
+    h = auth.hash_password("averylongpassword")
+    assert auth.verify_password("averylongpassword", h)
+    assert not auth.verify_password("wrong", h)
+    assert h.startswith("scrypt:")
+
+
+def test_agent_session_helper():
     s = auth.start_agent_session()
     assert s.role == "agent" and s.customer_id is None

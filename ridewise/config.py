@@ -51,6 +51,10 @@ class Settings:
     web_search_enabled: bool = _b("WEB_SEARCH_ENABLED", False)
     tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
 
+    # Staff (agent) login
+    agent_id: str = os.getenv("AGENT_ID", "agent")
+    agent_pw_hash: str = os.getenv("AGENT_PW_HASH", "")
+
     # Tracing
     langsmith_tracing: bool = _b("LANGSMITH_TRACING", False)
 
