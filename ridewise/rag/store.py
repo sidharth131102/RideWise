@@ -109,3 +109,83 @@ class LocalStore:
                 display_text=c.get("display_text", c["content"]),
                 score=cosine.get(gi, 0.0), source_type=c.get("source_type", "pdf")))
         return out
+
+
+class SupabaseStore:
+    """Postgres + pgvector store with the same hybrid (RRF) search, via the
+    match_policy_chunks() SQL function. Poolers reject server-side prepared
+    statements, so prepare_threshold is disabled."""
+
+    def __init__(self, dsn: str | None = None, statement_timeout_ms: int = 2000) -> None:
+        self.dsn = dsn or settings.supabase_db_url
+        self.statement_timeout_ms = statement_timeout_ms
+        if not self.dsn:
+            raise ValueError("SUPABASE_DB_URL is not set")
+
+    def _connect(self):
+        import psycopg
+        from pgvector.psycopg import register_vector
+        conn = psycopg.connect(
+            self.dsn, prepare_threshold=None, connect_timeout=5,
+            options=f"-c statement_timeout={self.statement_timeout_ms}")
+        register_vector(conn)
+        return conn
+
+    def upsert(self, chunks: list[dict], embeddings) -> None:
+        if embeddings is None:
+            raise ValueError("Supabase store requires embeddings")
+        import numpy as np
+        rows = []
+        for c, vec in zip(chunks, embeddings):
+            rows.append((c["id"], c["doc_id"], c["title"],
+                         str(c.get("version")) if c.get("version") is not None else None,
+                         str(c.get("effective_date")) if c.get("effective_date") else None,
+                         int(c.get("page", 0)), c.get("section"), c["content"],
+                         c.get("display_text", c["content"]), c.get("source_type", "pdf"),
+                         np.asarray(vec, dtype=np.float32)))
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.executemany("""
+                insert into policy_chunks
+                  (id, doc_id, title, version, effective_date, page, section,
+                   content, display_text, source_type, embedding)
+                values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                on conflict (id) do update set
+                  doc_id=excluded.doc_id, title=excluded.title, version=excluded.version,
+                  effective_date=excluded.effective_date, page=excluded.page,
+                  section=excluded.section, content=excluded.content,
+                  display_text=excluded.display_text, source_type=excluded.source_type,
+                  embedding=excluded.embedding
+            """, rows)
+            # delete stale ids for re-ingested docs
+            keep = [c["id"] for c in chunks]
+            doc_ids = sorted({c["doc_id"] for c in chunks})
+            cur.execute(
+                "delete from policy_chunks where doc_id = any(%s) and not (id = any(%s))",
+                (doc_ids, keep))
+            conn.commit()
+
+    def count(self) -> int:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("select count(*) from policy_chunks")
+            return cur.fetchone()[0]
+
+    def search(self, query: str, qvec, doc_id: str | None = None,
+               version: str | None = None, k: int = 5) -> list[Chunk]:
+        if qvec is None:
+            raise ValueError("Supabase search requires a query embedding")
+        import numpy as np
+        qv = np.asarray(qvec, dtype=np.float32)
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "select id, doc_id, title, version, effective_date, page, section, "
+                "content, display_text, source_type, rrf_score, cosine "
+                "from match_policy_chunks(%s,%s,%s,%s,%s)",
+                (qv, query, doc_id, version, k))
+            rows = cur.fetchall()
+        out = []
+        for r in rows:
+            out.append(Chunk(
+                id=r[0], doc_id=r[1], title=r[2], version=r[3], effective_date=r[4],
+                page=r[5], section=r[6], text=r[7], display_text=r[8],
+                source_type=r[9], score=float(r[11] or 0.0)))
+        return out

@@ -26,6 +26,21 @@ def main() -> None:
           f"embeddings: {'yes' if vecs is not None else 'NO (FTS/BM25 only)'}")
     print(f"wrote {store.jsonl}")
 
+    # also upsert to Supabase pgvector when configured (local index stays as
+    # the resilience fallback)
+    from ..config import settings
+    if settings.supabase_db_url:
+        if vecs is None:
+            print("Supabase: SKIP (no embeddings available)")
+        else:
+            from .store import SupabaseStore
+            try:
+                sb = SupabaseStore()
+                sb.upsert(dicts, vecs)
+                print(f"Supabase: upserted {sb.count()} rows to policy_chunks")
+            except Exception as e:  # noqa: BLE001
+                print(f"Supabase: FAILED ({e}); local index is still usable")
+
 
 if __name__ == "__main__":
     main()
