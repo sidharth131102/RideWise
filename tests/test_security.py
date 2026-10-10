@@ -82,6 +82,21 @@ def test_normalise_ref():
     assert ds.normalise_ref("B 0001") == "B-0001"
 
 
+def test_city_normalisation():
+    assert ds.normalise_city("BLR") == "Bengaluru"
+    assert ds.normalise_city("bangalore ") == "Bengaluru"
+    assert ds.normalise_city("Mysore") == "Mysuru"
+    sc = scoped(None)  # agent
+    # Bengaluru variants (Bengaluru 79 + Bangalore 39 + BLR 29 + 'bangalore ' 17) -> 164
+    n = sc.conn.execute("select count(*) from customers where city='Bengaluru'").fetchone()[0]
+    assert n == 164
+    # raw value preserved
+    raw = sc.conn.execute(
+        "select city, city_raw from customers where city_raw='BLR' limit 1").fetchone()
+    assert raw["city"] == "Bengaluru" and raw["city_raw"] == "BLR"
+    sc.close()
+
+
 def test_scoped_db_is_query_only():
     sc = scoped("CUST0001")
     # query_only pragma set; even without authorizer writes would fail

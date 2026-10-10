@@ -53,6 +53,28 @@ def ref_kind(ref: str) -> str | None:
 _PHONE_RE = re.compile(r"\b(\d{10})\b")
 _EMAIL_RE = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
 
+# city alias normalisation (data has Bengaluru/Bangalore/BLR/"bangalore " etc.)
+_CITY_ALIASES = {
+    "bengaluru": "Bengaluru", "bangalore": "Bengaluru", "blr": "Bengaluru",
+    "bengalooru": "Bengaluru",
+    "mangaluru": "Mangaluru", "mangalore": "Mangaluru",
+    "mysuru": "Mysuru", "mysore": "Mysuru",
+    "hyderabad": "Hyderabad", "hyd": "Hyderabad",
+    "chennai": "Chennai", "madras": "Chennai",
+    "pune": "Pune",
+}
+# the canonical set, for prompting the SQL model
+CANONICAL_CITIES = sorted(set(_CITY_ALIASES.values()))
+
+
+def normalise_city(v: str | None) -> str | None:
+    if v is None:
+        return None
+    key = re.sub(r"\s+", " ", v).strip().lower()
+    if key in _CITY_ALIASES:
+        return _CITY_ALIASES[key]
+    return re.sub(r"\s+", " ", v).strip().title()
+
 
 def mask_phone(v: str | None) -> str | None:
     if not v:
@@ -169,6 +191,9 @@ def build(session: Session, db_path) -> ScopedDB:
     for (create_sql,) in src.execute(
             "select sql from sqlite_master where type='table' and sql is not null"):
         mem.execute(create_sql)
+    # keep the raw city alongside the normalised one (alias normalisation)
+    if schema.has_column("customers", "city"):
+        mem.execute("ALTER TABLE customers ADD COLUMN city_raw TEXT")
 
     if session.role == "customer":
         _build_customer(src, mem, schema, session.customer_id or "__none__")
@@ -217,8 +242,11 @@ def _copy_rows(src, mem, schema: SchemaInfo, table: str,
                where: str = "", params=(), *,
                mask_pii: bool = False, scrub_name: str | None = None) -> None:
     cols = _table_columns(schema, table)
+    has_city = table == "customers" and "city" in cols
+    out_cols = cols + (["city_raw"] if has_city else [])
     collist = ", ".join(f'"{c}"' for c in cols)
-    placeholders = ", ".join("?" for _ in cols)
+    out_collist = ", ".join(f'"{c}"' for c in out_cols)
+    placeholders = ", ".join("?" for _ in out_cols)
     out_rows = []
     for row in src.execute(f'select {collist} from "{table}" {where}', params):
         d = dict(row)
@@ -231,6 +259,13 @@ def _copy_rows(src, mem, schema: SchemaInfo, table: str,
             d["remarks"] = scrub_text(d.get("remarks"), scrub_name)
         if table == "damage_reports" and "description" in d:
             d["description"] = scrub_text(d.get("description"), scrub_name)
-        out_rows.append(tuple(d[c] for c in cols))
+        raw_city = None
+        if has_city:
+            raw_city = d.get("city")
+            d["city"] = normalise_city(raw_city)
+        base = [d[c] for c in cols]
+        if has_city:
+            base.append(raw_city)
+        out_rows.append(tuple(base))
     mem.executemany(
-        f'insert into "{table}" ({collist}) values ({placeholders})', out_rows)
+        f'insert into "{table}" ({out_collist}) values ({placeholders})', out_rows)

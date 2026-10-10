@@ -28,6 +28,9 @@ Confirmed semantics:
 - vehicle_type: BIKE, SCOOTER, EV_SCOOTER, EV_BIKE. vehicles.status: ACTIVE, MAINTENANCE, RETIRED.
 - damage_reports.claim_status: OPEN, CHARGED, DISPUTED, WAIVED (customer charged only when CHARGED).
 - "upcoming" = booking_status='UPC' (never cancelled). "past/previous" = scheduled_start < current time.
+- customers.city is NORMALISED to a canonical spelling; filter on the canonical value.
+  Canonical cities: Bengaluru (covers Bangalore/BLR), Mangaluru (Mangalore), Mysuru (Mysore),
+  Hyderabad, Chennai, Pune. The original text is kept in customers.city_raw.
 """
 
 _FORBIDDEN_NODES = (
