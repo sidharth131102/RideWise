@@ -1,4 +1,4 @@
-# Build Prompt v2 — Read-only Support Chatbot (3-hour build, any dataset)
+# Build Prompt — Read-only Support Chatbot (3-hour build, any dataset)
 
 You are building a **read-only, post-transaction support chatbot** for a company whose data arrives as:
 - **one SQLite database**
@@ -8,9 +8,8 @@ You are building a **read-only, post-transaction support chatbot** for a company
 It answers questions from three sources: **the database, the policy PDFs and (optionally) public web search**. It
 **never acts**: it never books, modifies, cancels, pays or refunds anything.
 
-This prompt is the second version. It was written after a complete build of the same system (RideBud, for a
-two-wheeler rental company). Every rule marked **⚠ Lesson** exists because breaking it cost time or caused a bug in
-that build. The architecture is fixed: **do not re-plan it. Discover the data, then build in the order given.**
+Rules marked **⚠** flag known pitfalls. The architecture is fixed: **do not re-plan it. Discover the data, then build
+in the order given.**
 
 **The goal:** a working, tested, demo-able app in **3 hours**. Correctness, access control and grounded answers come
 before features. Keep the app runnable after every step, and commit after every step.
@@ -24,7 +23,7 @@ before features. Keep the app runnable after every step, and commit after every 
 - [3. Repository layout and contracts](#3-repository-layout-and-contracts)
 - [4. Build sequence (time-boxed)](#4-build-sequence-time-boxed)
 - [5. Prompts (use these templates)](#5-prompts-use-these-templates)
-- [6. Lessons → mandatory rules (read before writing code)](#6-lessons--mandatory-rules-read-before-writing-code)
+- [6. Mandatory rules (read before writing code)](#6-mandatory-rules-read-before-writing-code)
 - [7. Tests (minimum set)](#7-tests-minimum-set)
 - [8. UI specification](#8-ui-specification)
 - [9. Deliverables](#9-deliverables)
@@ -63,7 +62,7 @@ before features. Keep the app runnable after every step, and commit after every 
 
 ## 1. Before the clock starts (pre-flight, ~30 min, not counted)
 
-Do all of this before the 3 hours start. Each item cost real time last build.
+Do all of this before the 3 hours start.
 
 - [ ] **Python 3.11 venv**, then `pip install -r requirements.txt` (§3.3). Torch is large; install early.
 - [ ] **Pre-download the embedding model** into the HF cache:
@@ -72,20 +71,19 @@ Do all of this before the 3 hours start. Each item cost real time last build.
   snapshot_download("intfloat/multilingual-e5-base",
       allow_patterns=["*.json", "*.txt", "model.safetensors", "sentencepiece.bpe.model", "tokenizer*", "1_Pooling/*", "modules.json"])
   ```
-  ⚠ Lesson: the plain `SentenceTransformer(...)` download stalled at 400 MB with no error. If it stalls, kill it and
-  resume with `snapshot_download` as above. Run the app with `HF_HUB_OFFLINE=1` afterwards.
+  ⚠ The plain `SentenceTransformer(...)` download can stall partway with no error. If it stalls, kill it and resume
+  with `snapshot_download` as above. Run the app with `HF_HUB_OFFLINE=1` afterwards.
 - [ ] **Supabase:** create the project (pick the region nearest the users) and run the migration (§4, Step 4) in the
   SQL Editor. Copy the **Session pooler** URI, not "Direct connection".
-  ⚠ Lesson: the free tier's direct connection is IPv6-only and fails on many networks.
-  ⚠ Lesson: **URL-encode the password**: `@`→`%40`, `:`→`%3A`, `/`→`%2F`, `#`→`%23`, `%`→`%25`.
+  ⚠ The free tier's direct connection is IPv6-only and fails on many networks.
+  ⚠ **URL-encode the password**: `@`→`%40`, `:`→`%3A`, `/`→`%2F`, `#`→`%23`, `%`→`%25`.
   Open the dashboard the day before the demo; idle free projects pause.
 - [ ] **Check every model ID against the provider's deprecations page** before using it.
-  ⚠ Lesson: `llama-3.3-70b-versatile` had been shut down two months earlier, while the provider's models page still
-  listed it. Prefer production (not preview) models that support **JSON mode**. For reasoning models (e.g.
-  `openai/gpt-oss-*`), send `reasoning_effort="low"`.
+  ⚠ A provider's models page can still list a model that has been shut down. Prefer production (not preview) models
+  that support **JSON mode**. For reasoning models (e.g. `openai/gpt-oss-*`), send `reasoning_effort="low"`.
 - [ ] **Note the provider's rate limits** (tokens/minute and **tokens/day**).
-  ⚠ Lesson: Groq's free tier (8k TPM, 200k TPD) ran out mid-testing. One question uses about 4–7k tokens. Budget
-  for it, and keep prompts lean (§6.12).
+  ⚠ Free tiers (e.g. Groq: 8k TPM, 200k TPD) run out quickly during testing. One question can use about 4–7k tokens.
+  Budget for it, and keep prompts lean (§6.12).
 - [ ] **Keys in `.env`:** LLM, `SUPABASE_DB_URL`, `TAVILY_API_KEY`, optionally LangSmith. Run
   `scripts/check_services.py` (§3.2) once to see one OK/FAIL line per service.
 
@@ -93,7 +91,7 @@ Do all of this before the 3 hours start. Each item cost real time last build.
 
 ## 2. Locked architecture (do not re-decide)
 
-These decisions were evaluated and validated in the previous build. Copy the reasoning into `DECISIONS.md`.
+These decisions are final. Copy the reasoning into `DECISIONS.md`.
 
 | Area | Decision | Rejected (and why) |
 |---|---|---|
@@ -107,12 +105,12 @@ These decisions were evaluated and validated in the previous build. Copy the rea
 | **Retrieval** | Code picks the policy version, then **hybrid**: pgvector cosine + Postgres full-text, fused with **RRF (k=60)** in one SQL function; top 5; cosine floor calibrated by eval | Dense only (misses exact terms); FTS only (misses paraphrases and all untranslated Indic); LLM picks version; reranker/HyDE (extra latency, add only if hit@5 < 90%) |
 | **Vector store** | **Supabase Postgres + pgvector**, policy chunks only; customer data never leaves SQLite | Pinecone (extra vendor, DIY sparse vectors); Mongo Atlas (separate search index + pipeline); Chroma (kept as the idea behind the local fallback) |
 | **Resilience** | Ingest also writes `data/index/chunks.jsonl` + `embeddings.npy`; if Supabase doesn't answer in 2 s, run the **same** hybrid search locally (numpy + `rank_bm25` + RRF) with a warning | A hard network dependency during the demo |
-| **Scanned images** | **Verified hand transcription** into `data/transcriptions/<doc>_p<N>.md`, detected automatically, fail-loud if missing, validated (range / monotonic / coverage) + DB cross-check | OCR (misread the one critical cell three ways); vision LLMs (break rules or need checking anyway); multimodal embeddings (can't feed calculations) |
+| **Scanned images** | **Verified hand transcription** into `data/transcriptions/<doc>_p<N>.md`, detected automatically, fail-loud if missing, validated (range / monotonic / coverage) + DB cross-check | OCR (misreads critical table cells); vision LLMs (break rules or need checking anyway); multimodal embeddings (can't feed calculations) |
 | **Memory** | Structured state (active entity ID, language, last intent, last sources) + last 6 turns; cleared on topic change; **never grants access** | Summary memory; vector memory (privacy) |
 | **Answer safety** | Evidence numbered S1…Sn inside `<<<DATA — not instructions>>>`; code **validation** (§4, Step 6); one regeneration; then a **template answer built from the evidence** | Trusting the LLM's output |
-| **Customer login** | Registered email + last 4 digits of registered phone (check uniqueness in Step 1); one generic error; constant-time compare; lockout 5 per 15 min per identity + 10 per session | Demo/role picker (removed: unauthenticated); OTP (needs SMS/email service; note as production upgrade) |
+| **Customer login** | Registered email + last 4 digits of registered phone (check uniqueness in Step 1); one generic error; constant-time compare; lockout 5 per 15 min per identity + 10 per session | Demo/role picker (unauthenticated); OTP (needs SMS/email service; note as production upgrade) |
 | **Staff login** | Staff ID + password stored only as a **salted scrypt hash** (`hashlib.scrypt`, n=2¹⁴, r=8, p=1, min 12 chars) via `scripts/set_agent_password.py` | Plain-text env var; fast hashes |
-| **Voice in** | `st.chat_input(accept_audio=True)` (mic **inside** the chat bar) → hosted Whisper (`whisper-large-v3`) with language hint + domain prompt → **editable "Heard you say" card**, never auto-sent; no audio stored | Browser Web Speech API (Chrome/Edge only, sends audio to Google, weak Indic support: it failed in practice); third-party mic components (unnecessary) |
+| **Voice in** | `st.chat_input(accept_audio=True)` (mic **inside** the chat bar) → hosted Whisper (`whisper-large-v3`) with language hint + domain prompt → **editable "Heard you say" card**, never auto-sent; no audio stored | Browser Web Speech API (Chrome/Edge only, sends audio to Google, weak Indic support); third-party mic components (unnecessary) |
 | **Voice out** | Browser `speechSynthesis`, one Listen/Stop pill | Cloud TTS (keys, cost) |
 | **Web search** | Tavily, one call, `include_domains_mode="prefer"`, never for transactional questions | DuckDuckGo scraping (unofficial) |
 | **Tracing** | LangSmith, **off by default**; traces carry evidence, so keep them off for the demo | Always on (privacy) |
@@ -213,7 +211,7 @@ Write and run `scripts/inspect_assets.py`. It must print:
 - **Login identity:** whether email (or phone) is unique per customer, so you know whether email + last-4 works.
 - **PDFs:** per-page text, headings, version/effective-date lines, and **image regions**. Flag a page when it has an
   embedded image ≥ 300 pt wide or covering ≥ 15% of the page, ignoring small top-of-page logos.
-  ⚠ Lesson: **don't gate image detection on text length**; figures sat on text-heavy pages.
+  ⚠ **Don't gate image detection on text length**; figures can sit on text-heavy pages.
 - **Rule sweeps:** apply candidate rules to **all** historical rows and count mismatches (see below).
 
 Then **render each flagged image region to PNG** (`page.get_pixmap(dpi=150, clip=bbox)`), look at it, and transcribe
@@ -224,12 +222,12 @@ it into `data/transcriptions/<doc_id>_p<N>.md`:
 
 **The rule sweeps are the single most valuable check.** For each money rule (refund tiers, fees, charges):
 - Find which date or field **decides the policy version.** Test each candidate (booking time, cancellation time,
-  start time) and record how many historical refunds each one reproduces. ⚠ Lesson: the right one reproduced every
-  processed refund; the others gave 3–4 mismatches.
+  start time) and record how many historical refunds each one reproduces. The right one should reproduce every
+  processed refund.
 - **Check cutover timezones.** A "1 July 00:00 local time" cutover is not `'YYYY-07-01'` in UTC.
 - Check that fees, penalties and charges reproduce the recorded penalty rows.
 - Check the **rounding** convention (Python `round()` vs half-up) against recorded tax amounts.
-  ⚠ Lesson: half-up was ₹0.01 off on 3 rows.
+  ⚠ The wrong convention can be ₹0.01 off on a few rows.
 - List rows that **don't** match. These are usually your golden cases (e.g. "eligible but not processed yet").
 
 Write `FINDINGS.md` (about a page): schema, status meanings (quoted from the dictionary), payment semantics, timezone,
@@ -249,10 +247,10 @@ injection row, and the masked-remark row.
   - **Customer:** their own rows only (customer → their transactions → linked payments, reports, and referenced
     master rows such as vehicles).
   - **Agent:** all rows. Mask contact and identity PII (phone `98******21`, email `ab***@domain`, DOB `****-**-**`,
-    licence `KA***********49`). **Ask about names** (the last build showed full names to staff).
+    licence `KA***********49`). **Ask about names.**
 - **Free-text scrub:** phones and emails for **both** roles; "Customer <Name>" patterns for customers.
 - Normalise aliases (e.g. city spellings) at copy time and keep the raw value in a `*_raw` column.
-- **Capture `SchemaInfo` before locking.** ⚠ Lesson: the authorizer blocks `PRAGMA` afterwards.
+- **Capture `SchemaInfo` before locking.** ⚠ The authorizer blocks `PRAGMA` afterwards.
 - Lock: `PRAGMA query_only=ON`, then `set_authorizer` allowing only SELECT/READ/FUNCTION.
 - `entity_visible(conn, ref)` is the ownership check. "Not found" and "not yours" get the **same** reply.
 - `normalise_ref("b2031") -> "B-2031"`, but only in a format confirmed in Step 1.
@@ -307,11 +305,11 @@ alter table policy_chunks enable row level security;   -- no anon policies
 ```
 
 **Chunker:**
-- PyMuPDF `page.find_tables()` to lift tables out whole. ⚠ Lesson: it detected every text-layer table cleanly.
+- PyMuPDF `page.find_tables()` to lift tables out whole.
 - Text lines outside tables are grouped by numbered headings, then clauses; tiny chunks merge with the next one on
   the same page.
 - **Table description = the full clause that introduces it** (or "(continued)" for a table carried over from the
-  previous page). ⚠ Lesson: using just the previous line gave fragments like "time. The refund depends…".
+  previous page). ⚠ Using just the previous line produces sentence fragments.
 - Flagged image pages: append the transcription chunk (embedded text = non-table lines; display = full Markdown);
   **raise `IngestError` if it's missing**; warn when `verified_by` is empty.
 - Context header: `[DOC title | version | effective date or "effective date not stated" | §section | p.N]`.
@@ -320,12 +318,12 @@ alter table policy_chunks enable row level security;   -- no anon policies
 **Ingest:**
 - Write `data/index/chunks.jsonl` + `embeddings.npy`, then upsert to Supabase and delete stale IDs for re-ingested
   docs.
-- Use `psycopg.connect(..., prepare_threshold=None)`. ⚠ Lesson: poolers reject server-side prepared statements.
+- Use `psycopg.connect(..., prepare_threshold=None)`. ⚠ Poolers reject server-side prepared statements.
 
 **Retrieve:**
 - Embed with `query: `; Supabase first (2 s timeout), else LocalStore with a warning.
-- **Join FTS keywords with OR** (stopwords removed). ⚠ Lesson: `websearch_to_tsquery` treats spaces as AND, so full
-  questions matched nothing.
+- **Join FTS keywords with OR** (stopwords removed). ⚠ `websearch_to_tsquery` treats spaces as AND, so full
+  questions match nothing.
 
 **Eval** (`scripts/eval_retrieval.py` + `tests/fixtures/retrieval_eval.yaml`):
 - **≥ 25 covered questions,** including at least 10 short generic phrasings ("What is the refund policy?", "Where
@@ -334,8 +332,8 @@ alter table policy_chunks enable row level security;   -- no anon policies
 - Report hit@5 / MRR for dense / FTS / hybrid, and the cosine distribution of English covered vs uncovered vs raw
   Indic.
 - **Choose the floor for recall:** every covered English question must pass.
-  ⚠ Lesson: a floor fitted on 2 uncovered questions (0.82) refused "What is the current cancellation policy?"
-  (0.818). The real distributions overlapped at 0.810, and 0.80 was the right call.
+  ⚠ A floor fitted on only a couple of uncovered questions will refuse real covered ones; the covered and uncovered
+  distributions can overlap, so set the floor below the lowest covered English score.
 - Clearly unrelated questions should still drop. Give raw untranslated Indic queries a lower floor plus a warning.
 - Write the table into DECISIONS.md. If hybrid hit@5 < 90%, report it; the first fix is a reranker.
 
@@ -365,8 +363,8 @@ with no gaps or overlaps; unique, ordered versions.
 - `jsonable()` turns Decimals into 2-dp strings for the composer. `display_times()` converts UTC → local **once**.
 
 **Cited schedule sources:** a function that turns every policy version into a cited source for general policy
-questions (scope, which version is current, all tiers). ⚠ Lesson: generic "current policy" questions otherwise missed
-the scanned table.
+questions (scope, which version is current, all tiers). ⚠ Otherwise generic "current policy" questions miss tables
+that exist only as transcriptions.
 
 **Commit:** `feat: versioned policy rules and deterministic calc`
 
@@ -374,16 +372,16 @@ the scanned table.
 
 **Pre-checks (code, before any LLM call):**
 - **Action regex:** a leading imperative verb **with an object and no trailing "?"** ("Cancel B-1709", "book a
-  scooter"); "can/could/will you <verb>"; "I want you to <verb>"; "refund me". ⚠ Lesson: a bare leading "refund"
-  wrongly caught "refund for B-1709?".
+  scooter"); "can/could/will you <verb>"; "I want you to <verb>"; "refund me". ⚠ A bare leading "refund" must not
+  catch "refund for B-1709?".
 - Entity-ID regex.
 
 **Route:** the §5.1 template, with `user_role`, state and the last 6 turns. Then the safety nets, in code:
 - Ownership check on **every** ID: from the message, from the router, and from memory.
 - **Record-terms rescue:** `web`/`out_of_scope` + the question names our records (entity nouns from the schema) +
-  no action verb → `db`. ⚠ Lesson: "how many vehicles are active now" was routed to web, then off-topic.
+  no action verb → `db`. ⚠ E.g. "how many vehicles are active now" must not go to web or off-topic.
 - `out_of_scope` reply: "can't act" **only** for action requests; otherwise "not something our records or policies
-  cover". ⚠ Lesson: one shared reply confused users.
+  cover". ⚠ One shared reply confuses users.
 - Web is never used when an entity ID is present or the topic is refunds/fees.
 - A customer with several records asking an entity-specific question with no ID → a clarify question listing their
   recent IDs.
@@ -393,15 +391,16 @@ the scanned table.
 - Policy: retrieve, with a version filter when the record is known; add an unfiltered top-3; add the rule citations
   behind each calculated number; for general refund questions, add the cited schedule sources.
 - Web only for `web`.
-- **Convert every DB timestamp to local time before the composer sees it.** ⚠ Lesson: raw UTC rows were presented
-  as IST.
-- Every SQL source carries a **code-computed `row_count`** (plus a note when capped). ⚠ Lesson: the model counted
-  rows itself and validation rightly rejected its number.
+- **Convert every DB timestamp to local time before the composer sees it.** ⚠ Otherwise raw UTC rows get presented
+  as local time.
+- Every SQL source carries a **code-computed `row_count`** (plus a note when capped). ⚠ Otherwise the model counts
+  rows itself and validation rejects its number.
 
 **Compose:** the §5.3 template; evidence as JSON S1…Sn inside the DATA markers.
 
 **Validate** (`validate.py`). First **normalise**: `【S3】`, `［S3］`, `[ S3 ]` → `[S3]`; `[S1, S4]` → `[S1][S4]`;
-U+2010–2013 / U+2212 → `-`; NBSP → space. ⚠ Lesson: gpt-oss used these, and citations went unchecked. Then check:
+U+2010–2013 / U+2212 → `-`; NBSP → space. ⚠ Some models (e.g. gpt-oss) emit these; without normalisation,
+citations go unchecked. Then check:
 - every number is in the evidence (ints ≤ 10 allowed for list numbering; ignore digits inside IDs);
 - every ID is in the evidence;
 - every `[S#]` exists, and **at least one is cited** when sources exist;
@@ -413,7 +412,7 @@ On failure: regenerate once with the errors, then the template answer.
 
 **Honest fallbacks:**
 - If the SQL step failed because the LLM was unavailable → "the AI service is temporarily unavailable; try again;
-  questions about a specific ID still work". ⚠ Lesson: "couldn't find evidence" misled users.
+  questions about a specific ID still work". ⚠ "Couldn't find evidence" misleads users.
 - Map technical warnings to friendly one-liners in the UI.
 
 **Template answer** (no LLM): records, policy excerpts (skip context headers, "Transcribed from…" lines, table pipes,
@@ -432,13 +431,13 @@ bare headings; trim at a sentence), calculation lines, web results. Use role-awa
 2. **Voice in:** §2 row "Voice in". Whisper prompt = domain vocabulary (company name, an example ID, key fee terms,
    place names). Normalise native-script digits → ASCII and "B 1709" → "B-1709".
 3. **Voice out:** the Listen/Stop pill, with the payload passed through `script_safe_json` (escape `<`, `>`, `&` as
-   `<…`). ⚠ Lesson: plain `json.dumps` lets `</script>` break out.
+   `<…`). ⚠ Plain `json.dumps` lets `</script>` break out.
 4. **Web search:** Tavily, prefer official domains, labelled "Public web source".
 5. **Staff SQL panel:** `Answer.queries` → a staff-only "SQL" popover with sqlglot pretty-printing and row counts.
 6. **LangSmith** (off by default): `@traceable` spans (`turn`, `route`, `gather_evidence`, `entity_lookup`,
    `nl_to_sql`, `calculate`, `policy_retrieval` as retriever documents, `compose`, `validate_answer`),
    `wrap_openai` on the client, `thread_id` metadata, and root inputs/outputs mapped to **`question` / `answer`**.
-   ⚠ Lesson: otherwise the trace list previews "en". Tests force tracing off.
+   ⚠ Otherwise the trace list previews the language code. Tests force tracing off.
 
 ### Step 8 — Change request (10 min, whenever it arrives)
 - **New policy version:** add the PDF, re-run ingest, add a `versions:` entry with citations, re-run all tests. Old
@@ -510,11 +509,11 @@ Respond with JSON only: {"answer": "...", "summary": "one-sentence English summa
 
 ---
 
-## 6. Lessons → mandatory rules (read before writing code)
+## 6. Mandatory rules (read before writing code)
 
 1. **Never write regex or escape sequences through a heredoc or string-patching step without checking the result.**
-   `\b` silently became a backspace character (U+0008) twice, so two regexes never matched; a `\` line continuation
-   became a literal `\n`. Prefer editing files directly. Use parentheses instead of backslash continuations. Keep
+   `\b` can silently become a backspace character (U+0008), so the regex never matches; a `\` line continuation can
+   become a literal `\n`. Prefer editing files directly. Use parentheses instead of backslash continuations. Keep
    `test_source_files_have_no_control_characters` (scans for chr 7/8/11/12) in the suite from day one.
 2. **Calibrate thresholds on realistic data, not on 2 examples.** Re-calibrate whenever a real question fails.
 3. **Tell the SQL model the database is pre-scoped,** and reject placeholders in the validator.

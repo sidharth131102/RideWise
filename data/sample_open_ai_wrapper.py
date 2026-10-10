@@ -4,7 +4,8 @@ endpoint = "https://neo-hackathon.services.ai.azure.com/openai/v1/"
 model_name = "gpt-oss-120b"
 deployment_name = "Neo-Hackathon"
  
-api_key = "REDACTED-LLM-KEY"
+import os
+api_key = os.getenv("LLM_API_KEY", "")  # set in .env; never hard-code the key
  
 client = OpenAI(
     base_url=f"{endpoint}",
