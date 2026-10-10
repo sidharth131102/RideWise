@@ -257,6 +257,16 @@ def sidebar(sess: Session):
                      else "<span class='rw-chip rw-off'>Offline</span>"))
         st.markdown(status, unsafe_allow_html=True)
         st.write("")
+
+        # language selector (applies to the assistant's replies)
+        langs = list(LANGUAGES)
+        cur = sess.language if sess.language in langs else "en"
+        new_lang = st.selectbox("Reply language", langs, index=langs.index(cur),
+                                format_func=lambda k: LANGUAGES[k], key="chat_lang")
+        if new_lang != sess.language:
+            sess.language = new_lang
+            st.rerun()
+
         if st.button("New conversation", use_container_width=True, type="primary",
                      icon=":material/add_comment:"):
             start_new_conversation()

@@ -311,6 +311,9 @@ def _turn_out(out) -> dict:
                    process_inputs=_turn_in, process_outputs=_turn_out)
 def answer(session: Session, scoped: ScopedDB, text: str, history: list[dict]) -> Answer:
     rd = route(session, text, history)
+    # the UI language selection is authoritative for the reply language
+    if session.language:
+        rd.language = session.language
 
     # non-evidence intents
     if rd.intent == "smalltalk":
