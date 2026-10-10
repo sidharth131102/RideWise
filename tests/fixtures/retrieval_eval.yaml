@@ -1,0 +1,46 @@
+# Retrieval eval set. `doc` may be a string or a list of acceptable doc_ids.
+# RW-POL-01 Rental Agreement | 02 Cancellation v1 | 03 Cancellation v2
+# 04 Penalty Schedule | 05 EV Guide
+covered:
+  # --- short / generic phrasings ---
+  - {q: "What is the cancellation policy?", doc: [RW-POL-02, RW-POL-03]}
+  - {q: "What is the refund policy?", doc: [RW-POL-02, RW-POL-03]}
+  - {q: "Where are your hubs?", doc: RW-POL-01}
+  - {q: "What are the late fees?", doc: RW-POL-04}
+  - {q: "How do deposits work?", doc: RW-POL-01}
+  - {q: "What is KYC?", doc: RW-POL-01}
+  - {q: "Tell me about customer tiers", doc: [RW-POL-01, RW-POL-04]}
+  - {q: "What is a no-show?", doc: RW-POL-01}
+  - {q: "How is the rental charge calculated?", doc: RW-POL-01}
+  - {q: "EV charging help", doc: RW-POL-05}
+  # --- specific ---
+  - {q: "What refund do I get cancelling 48 hours before pickup?", doc: RW-POL-03}
+  - {q: "Version 1 refund schedule 24 hours", doc: RW-POL-02}
+  - {q: "late return fee is 1.5 times the hourly rate", doc: RW-POL-04}
+  - {q: "grace period for GOLD tier customers on late return", doc: RW-POL-04}
+  - {q: "low battery charging fee below 10 percent", doc: [RW-POL-04, RW-POL-05]}
+  - {q: "minimum rental duration hours", doc: RW-POL-01}
+  - {q: "security deposit for a scooter", doc: RW-POL-01}
+  - {q: "what happens if KYC is rejected", doc: RW-POL-01}
+  - {q: "damage claim status charged or waived", doc: RW-POL-04}
+  - {q: "typical range of the Ather 450X", doc: RW-POL-05}
+  - {q: "can I charge the EV at home", doc: RW-POL-05}
+  - {q: "GST rate on rental charges", doc: RW-POL-01}
+  - {q: "what if the battery runs out during my trip", doc: RW-POL-05}
+  - {q: "lost key charge", doc: RW-POL-04}
+  - {q: "cancellation by RideWise refund", doc: [RW-POL-02, RW-POL-03]}
+  # --- exact-term ---
+  - {q: "Koramangala hub", doc: RW-POL-01}
+  - {q: "Ultraviolette F77 range", doc: RW-POL-05}
+
+uncovered:
+  - "Do you rent cars?"
+  - "What's the weather in Bengaluru today?"
+  - "Can I book a flight?"
+  - "What is the capital of France?"
+  - "Do you sell insurance?"
+  - "How do I cook pasta?"
+  - "What is the stock price of RideWise?"
+  - "Do you offer car pooling to Mumbai?"
+  - "Can I rent a truck for moving house?"
+  - "What are your office job openings?"

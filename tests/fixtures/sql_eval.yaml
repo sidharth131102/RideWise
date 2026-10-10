@@ -1,0 +1,59 @@
+# NL->SQL eval. kind: scalar (compare first numeric cell) | idset (compare the
+# set of id-like values). scope: agent, or a customer_id for customer-scoped.
+agent:
+  - {q: "How many vehicles are active?", kind: scalar,
+     gold: "select count(*) from vehicles where status='ACTIVE'"}
+  - {q: "How many bookings are no-shows?", kind: scalar,
+     gold: "select count(*) from bookings where booking_status='NSH'"}
+  - {q: "How many customers are in the GOLD tier?", kind: scalar,
+     gold: "select count(*) from customers where customer_tier='GOLD'"}
+  - {q: "How many customers are based in Bengaluru?", kind: scalar,
+     gold: "select count(*) from customers where city='Bengaluru'"}
+  - {q: "How many bookings were cancelled by the customer?", kind: scalar,
+     gold: "select count(*) from bookings where booking_status='CNL_U'"}
+  - {q: "What is the total successful booking revenue excluding GST?", kind: scalar,
+     gold: "select sum(amount) from payments where payment_type='BOOKING' and payment_status='SUCCESS'"}
+  - {q: "How many EV scooters do we have?", kind: scalar,
+     gold: "select count(*) from vehicles where vehicle_type='EV_SCOOTER'"}
+  - {q: "How many payments failed?", kind: scalar,
+     gold: "select count(*) from payments where payment_status='FAILED'"}
+  - {q: "How many damage reports are still open?", kind: scalar,
+     gold: "select count(*) from damage_reports where claim_status='OPEN'"}
+  - {q: "How many vehicles are in maintenance?", kind: scalar,
+     gold: "select count(*) from vehicles where status='MAINTENANCE'"}
+  - {q: "What is the average hourly rate of bikes?", kind: scalar,
+     gold: "select avg(hourly_rate) from vehicles where vehicle_type='BIKE'"}
+  - {q: "How many customers have rejected KYC?", kind: scalar,
+     gold: "select count(*) from customers where kyc_status='REJECTED'"}
+  - {q: "How many bookings are currently ongoing?", kind: scalar,
+     gold: "select count(*) from bookings where booking_status='ONG'"}
+  - {q: "Total penalty amount collected (successful)?", kind: scalar,
+     gold: "select sum(amount) from payments where payment_type='PENALTY' and payment_status='SUCCESS'"}
+  - {q: "How many distinct hubs are there?", kind: scalar,
+     gold: "select count(distinct hub_name) from vehicles"}
+  - {q: "Which vehicle IDs are retired?", kind: idset,
+     gold: "select vehicle_id from vehicles where status='RETIRED'"}
+  - {q: "List customer IDs in the SILVER tier", kind: idset,
+     gold: "select customer_id from customers where customer_tier='SILVER'"}
+  - {q: "How many refunds have been issued?", kind: scalar,
+     gold: "select count(*) from payments where payment_type='REFUND' and payment_status='SUCCESS'"}
+  - {q: "How many bookings used an EV bike?", kind: scalar,
+     gold: "select count(*) from bookings b join vehicles v on v.vehicle_id=b.vehicle_id where v.vehicle_type='EV_BIKE'"}
+  - {q: "Count completed bookings", kind: scalar,
+     gold: "select count(*) from bookings where booking_status='CMP'"}
+
+customer:
+  - {scope: CUST0106, q: "How many bookings do I have?", kind: scalar,
+     gold: "select count(*) from bookings"}
+  - {scope: CUST0106, q: "How many of my bookings are completed?", kind: scalar,
+     gold: "select count(*) from bookings where booking_status='CMP'"}
+  - {scope: CUST0001, q: "How many bookings do I have?", kind: scalar,
+     gold: "select count(*) from bookings"}
+  - {scope: CUST0001, q: "How much have I paid in total for bookings excluding GST?", kind: scalar,
+     gold: "select coalesce(sum(amount),0) from payments where payment_type='BOOKING' and payment_status='SUCCESS'"}
+  - {scope: CUST0106, q: "List my booking IDs", kind: idset,
+     gold: "select booking_id from bookings"}
+  - {scope: CUST0106, q: "How many of my bookings were cancelled by me?", kind: scalar,
+     gold: "select count(*) from bookings where booking_status='CNL_U'"}
+  - {scope: CUST0001, q: "What are my payment IDs?", kind: idset,
+     gold: "select payment_id from payments"}
