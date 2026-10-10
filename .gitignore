@@ -24,3 +24,6 @@ Thumbs.db
 # HF cache (if local)
 .hf_cache/
 data/image_regions/
+
+# Local chat history
+data/chat_history/

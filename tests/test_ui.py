@@ -31,6 +31,16 @@ def test_agent_session_starts():
     [b for b in at.button if b.label == "Start as support agent"][0].click().run()
     sess = at.session_state["session"]
     assert sess is not None and sess.role == "agent"
-    # header now shows New conversation / Sign out
+    # sidebar now shows New conversation / Sign out
     labels = [b.label for b in at.button]
-    assert "New conversation" in labels and "Sign out" in labels
+    assert any("New conversation" in l for l in labels) and "Sign out" in labels
+
+
+def test_customer_session_and_new_conversation():
+    at = _app().run()
+    at.text_input[0].set_value("CUST0001").run()
+    [b for b in at.button if b.label == "Start as customer"][0].click().run()
+    sess = at.session_state["session"]
+    assert sess is not None and sess.role == "customer" and sess.customer_id == "CUST0001"
+    # at least one conversation exists (active)
+    assert len(at.session_state["conversations"]) >= 1

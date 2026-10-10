@@ -40,6 +40,7 @@ class Settings:
     docs_dir: Path = _path("DOCS_DIR", "data")
     index_dir: Path = _path("INDEX_DIR", "data/index")
     transcriptions_dir: Path = _path("TRANSCRIPTIONS_DIR", "data/transcriptions")
+    chat_dir: Path = _path("CHAT_DIR", "data/chat_history")
 
     # Retrieval
     embeddings_enabled: bool = _b("EMBEDDINGS_ENABLED", True)
